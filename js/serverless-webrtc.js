@@ -19,30 +19,43 @@ var activedc;
 
 var pc1icedone = false;
 
+var qrFlow;
+
 $('#showLocalOffer').modal('hide');
 $('#getRemoteAnswer').modal('hide');
 $('#waitForConnection').modal('hide');
+$('#qrFlow').modal('hide');
 $('#createOrJoin').modal('show');
 
 $('#createBtn').click(function() {
-    $('#showLocalOffer').modal('show');
+    if ($('#using-camera').prop('checked')) {
+        qrFlow = new QRFlow(true);
+    } else {
+        $('#showLocalOffer').modal('show');
+    }
     createLocalOffer();
 });
 
 $('#joinBtn').click(function() {
-    $('#getRemoteOffer').modal('show');
+    if ($('#using-camera').prop('checked')) {
+        qrFlow = new QRFlow(false);
+    } else {
+        $('#getRemoteOffer').modal('show');
+    }
 });
 
 $('#offerSentBtn').click(function() {
     $('#getRemoteAnswer').modal('show');
 });
 
+function handleJsonOfferFromPC1(offer) {
+    var offerDesc = new RTCSessionDescription(JSON.parse(offer));
+    handleOfferFromPC1(offerDesc);
+}
+
 $('#offerRecdBtn').click(function() {
     var offer = $('#remoteOffer').val();
-    var offerDesc = new RTCSessionDescription(JSON.parse(offer));
-    console.log("Received remote offer", offerDesc);
-    writeToChatLog("Received remote offer", "text-success");
-    handleOfferFromPC1(offerDesc);
+    handleJsonOfferFromPC1(offer);
     $('#showLocalAnswer').modal('show');
 });
 
@@ -50,10 +63,14 @@ $('#answerSentBtn').click(function() {
     $('#waitForConnection').modal('show');
 });
 
-$('#answerRecdBtn').click(function() {
-    var answer = $('#remoteAnswer').val();
+function handleJsonAnswerFromPC2(answer) {
     var answerDesc = new RTCSessionDescription(JSON.parse(answer));
     handleAnswerFromPC2(answerDesc);
+}
+
+$('#answerRecdBtn').click(function() {
+    var answer = $('#remoteAnswer').val();
+    handleJsonAnswerFromPC2(answer);
     $('#waitForConnection').modal('show');
 });
 
@@ -106,6 +123,9 @@ function setupDC1() {
             console.log('data channel connect');
             $('#waitForConnection').modal('hide');
             $('#waitForConnection').remove();
+            if (qrFlow) {
+                qrFlow.remove();
+            }
         }
         dc1.onmessage = function (e) {
             console.log("Got message (pc1)", e.data);
@@ -145,7 +165,12 @@ function createLocalOffer() {
 pc1.onicecandidate = function (e) {
     console.log("ICE candidate (pc1)", e);
     if (e.candidate == null) {
-        $('#localOffer').html(JSON.stringify(pc1.localDescription));
+        var s = JSON.stringify(pc1.localDescription);
+        if (qrFlow) {
+            qrFlow.showQRCodes(s);
+        } else {
+            $('#localOffer').html(s);
+        }
     }
 };
 
@@ -157,6 +182,9 @@ function handleOnconnection() {
     //   - first onconnection() hides the dialog, then someone clicks
     //     on answerSentBtn which shows it, and it stays shown forever.
     $('#waitForConnection').remove();
+    if (qrFlow) {
+        qrFlow.remove();
+    }
     $('#showLocalAnswer').modal('hide');
     $('#messageTextBox').focus();
 }
@@ -185,10 +213,6 @@ function handleAnswerFromPC2(answerDesc) {
     pc1.setRemoteDescription(answerDesc);
 }
 
-function handleCandidateFromPC2(iceCandidate) {
-    pc1.addIceCandidate(iceCandidate);
-}
-
 
 /* THIS IS BOB, THE ANSWERER/RECEIVER */
 
@@ -206,6 +230,9 @@ pc2.ondatachannel = function (e) {
     dc2.onopen = function (e) {
         console.log('data channel connect');
         $('#waitForConnection').remove();
+        if (qrFlow) {
+            qrFlow.remove();
+        }
     }
     dc2.onmessage = function (e) {
         console.log("Got message (pc2)", e.data);
@@ -227,6 +254,8 @@ pc2.ondatachannel = function (e) {
 };
 
 function handleOfferFromPC1(offerDesc) {
+    console.log("Received remote offer", offerDesc);
+    writeToChatLog("Received remote offer", "text-success");
     pc2.setRemoteDescription(offerDesc);
     pc2.createAnswer(function (answerDesc) {
         writeToChatLog("Created local answer", "text-success");
@@ -237,17 +266,19 @@ function handleOfferFromPC1(offerDesc) {
 
 pc2.onicecandidate = function (e) {
     console.log("ICE candidate (pc2)", e);
-    if (e.candidate == null)
-       $('#localAnswer').html(JSON.stringify(pc2.localDescription));
+    if (e.candidate == null) {
+        var s = JSON.stringify(pc2.localDescription);
+        if (qrFlow) {
+            qrFlow.showQRCodes(s);
+        } else {
+            $('#localAnswer').html(s);
+        }
+    }
 };
 
 pc2.onsignalingstatechange = onsignalingstatechange;
 pc2.oniceconnectionstatechange = oniceconnectionstatechange;
 pc2.onicegatheringstatechange = onicegatheringstatechange;
-
-function handleCandidateFromPC1(iceCandidate) {
-    pc2.addIceCandidate(iceCandidate);
-}
 
 pc2.onaddstream = function (e) {
     console.log("Got remote stream", e);
@@ -273,4 +304,311 @@ function getTimestamp() {
 
 function writeToChatLog(message, message_type) {
     document.getElementById('chatlog').innerHTML += '<p class=\"' + message_type + '\">' + "[" + getTimestamp() + "] " + message + '</p>';
+}
+
+
+function QRFlow(isOfferer) {
+    var cameraSelect = $('<select>')
+        .on('change', function() {
+            stopCamera();
+            startCamera();
+        });
+
+    // TODO: firefox doesn't support media stream track
+    MediaStreamTrack.getSources(function(sources) {
+        for (var i = 0; i < sources.length; i++) {
+            if (sources[i].kind === 'video') {
+                cameraSelect.append(
+                    $('<option>')
+                        .attr('value', sources[i].id)
+                        .text(sources[i].label)
+                );
+            }
+        }
+    });
+
+    var cameraCanvas = $('<canvas>')
+        .attr('id', 'qr-canvas') // this id is required for the jsqrcode lib
+        .css({
+            width: '256px'
+        });
+
+    var cameraProgress = $('<div>');
+
+    var cameraContainer = $('<div>')
+        .text(isOfferer ? 'After the other device receives our offer, use this camera to scan their answer:'
+                        : 'Use this camera to scan the offer from the other device:')
+        .append('<br>')
+        .append('Select camera:')
+        .append(cameraSelect)
+        .append('<br>')
+        .append(cameraCanvas)
+        .append(cameraProgress);
+
+    // If this is the offerer, createLocalOffer is called shortly afterwards to fill this with the qr code
+    var qrCodeContainer = $('<div>').text(isOfferer ? 'Generating offer.' : '');
+
+    var modal = $('#qrFlow');
+    if (isOfferer) {
+        // Send offer with QR code first, then get answer with camera
+        modal.find('.modal-body').append(qrCodeContainer).append(cameraContainer).append(video);
+    } else {
+        // Scan offer with camera first, then send answer with qr codes
+        modal.find('.modal-body').append(cameraContainer).append(qrCodeContainer).append(video);
+    }
+
+    // Start off hidden until video permissions are accepted and camera started
+    modal.find('.modal-body').hide();
+    modal.modal('show');
+
+    // Need a dummy <video> to attach the webcam stream to but we'll manually copy frames into cameraCanvas
+    var video = $('<video autoplay>').hide().appendTo('body');
+
+    startCamera();
+
+
+    var payloadSize = 400;
+    function encodeQRText(offset, compressedMessage) {
+        // The compressedMessage does fit in a single QR code but it's huge and hard to scan
+        // So we need to split them into smaller chunks
+        var payload = compressedMessage.substr(offset, payloadSize);
+        var qrText = ',' + offset + ',' + compressedMessage.length + ',' + payload;
+        // QR codes already have built in error detection/correction but I am still seeing errors
+        // Add a simple checksum to help with that
+        var checksum = 0;
+        for (var i = 0; i < qrText.length; i++) {
+            checksum += qrText.charCodeAt(i);
+        }
+        qrText = (checksum % 256) + qrText;
+        return qrText;
+    }
+
+    function decodeQRText(qrText) {
+        var split = qrText.split(',', 3);
+        if (split.length != 3) {
+            throw 'invalid format';
+        }
+
+        var checksum = parseInt(split[0]);
+        var offset = parseInt(split[1]);
+        var totalSize = parseInt(split[2]);
+        var payload = qrText.substr(split[0].length + 1 + split[1].length + 1 + split[2].length + 1);
+
+        // Check that parseInt succeeded
+        if (isNaN(checksum) || isNaN(offset) || isNaN(totalSize)) {
+            throw 'invalid format';
+        }
+
+        // Check checksum
+        var expectedCheckSum = 0;
+        for (var i = split[0].length; i < qrText.length; i++) {
+            expectedCheckSum += qrText.charCodeAt(i);
+        }
+        expectedCheckSum %= 256;
+        if (expectedCheckSum != checksum) {
+            throw 'invalid checksum ' + checksum + ' ' + expectedCheckSum;
+        }
+
+        // Check payload length
+        var expectedPayloadLength = Math.min(payloadSize, totalSize - offset);
+        if (payload.length != expectedPayloadLength) {
+            throw 'invalid payload length ' + payload.length + ' ' + expectedPayloadLength;
+        }
+
+        return {
+            offset: offset,
+            totalSize: totalSize,
+            payload: payload,
+        }
+    }
+
+    var sendLoop;
+    function showQRCodes(message) {
+        var compressedMessage = LZString.compressToBase64(message);
+
+        var numQRCodes = Math.ceil(compressedMessage.length / payloadSize);
+
+        var label = $('<div>').text('1 of ' + numQRCodes);
+
+        var qrCodes = $('<div>');
+        for (var offset = 0; offset < compressedMessage.length; offset += payloadSize) {
+            qrCodes.append(
+                $('<div>')
+                    .css({
+                        padding: '5px 0'
+                    })
+                    .qrcode({
+                        text: encodeQRText(offset, compressedMessage),
+                        correctLevel: 1, // QRErrorCorrectLevel.L
+                    })
+                    .hide()
+            );
+        }
+        qrCodes.children(':first').show();
+
+        // Rapidly flash a bunch of qr codes
+        var rotate = function(delta) {
+            var currVisible = qrCodes.children(':visible');
+            currVisible.hide();
+            var nextIndex = (currVisible.index() + delta + numQRCodes) % numQRCodes;
+            label.text((nextIndex + 1) + ' of ' + numQRCodes);
+            qrCodes.children(':eq(' + nextIndex + ')').show();
+        }
+        clearInterval(sendLoop);
+        sendLoop = setInterval(function() {
+            rotate(1);
+        }, 100);
+
+        qrCodeContainer
+            .text("Here's your " + (isOfferer ? 'offer' : 'answer') + ". Send this by scanning with the other device's camera.")
+            .append(label)
+            .append(qrCodes)
+            .append(
+                $('<button class="btn">Previous block</button>')
+                    .on('click', function() {
+                        clearInterval(sendLoop);
+                        rotate(-1);
+                    })
+            )
+            .append(
+                $('<button class="btn">Next block</button>')
+                    .css('margin-left', '50px')
+                    .on('click', function() {
+                        clearInterval(sendLoop);
+                        rotate(1);
+                    })
+            );
+    }
+
+    var blocks;
+    var blocksReceived;
+    var expectedMessageSize;
+    function receiveQRCode(s, callbackIfCompleted) {
+        console.log(s);
+
+        var message = decodeQRText(s);
+        var blockIndex = message.offset / payloadSize;
+        var numBlocks = Math.ceil(message.totalSize / payloadSize);
+
+        // First block ever received
+        if (!blocks) {
+            blocks = new Array(numBlocks);
+            blocksReceived = 0;
+            expectedMessageSize = message.totalSize;
+
+            if (isOfferer) {
+                // Since we got an answer, we know other device is not scanning our qr code anymore
+                qrCodeContainer.hide();
+            }
+
+            // Draw a progress bar to show which blocks were received
+            var progressBar = $('<div>').css({
+                position: 'relative',
+                height: '20px',
+            });
+            for (var i = 0; i < numBlocks; i++) {
+                progressBar.append(
+                    $('<div>')
+                        .addClass('progress-tick')
+                        .css({
+                            'position': 'absolute',
+                            'top': '0',
+                            'left': (i * 100 / numBlocks) + '%',
+                            'width': (100 / numBlocks) + '%',
+                            'height': '100%',
+                            'text-align': 'center',
+                        })
+                        .attr('title', i + 1)
+                        .text('Block ' + (i + 1))
+                );
+            }
+            cameraProgress
+                .text('Receiving ' + (isOfferer ? 'answer' : 'offer') + '. Blocks received:')
+                .append(progressBar);
+        } else {
+            // Check that the expected size is consistent with previous blocks
+            if (message.totalSize != expectedMessageSize) {
+                throw 'inconsistent size ' + message.totalSize + ' ' + expectedMessageSize;
+            }
+        }
+
+        // First time receiving this block
+        if (blocks[blockIndex] === undefined) {
+            blocks[blockIndex] = message.payload;
+            blocksReceived++;
+            cameraProgress.find('.progress-tick:eq(' + blockIndex + ')')
+                .css('background-color', 'black');
+
+            // If received everything, call callback
+            if (blocksReceived === numBlocks) {
+                var fullMessage = LZString.decompressFromBase64(blocks.join(''));
+                callbackIfCompleted(fullMessage);
+            }
+        }
+    }
+
+    var localMediaStream;
+    var receiveLoop;
+    function startCamera() {
+        navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+        window.URL = window.URL || window.webkitURL;
+        navigator.getUserMedia({
+            video: {
+                optional: [{sourceId: cameraSelect.val()}]
+            }
+        }, function (stream) {
+            if (!modal.find('.modal-body').is(':visible')) {
+                modal.find('.modal-header h3').text(isOfferer ? 'Send offer / get answer' :
+                                                                'Get offer / send answer');
+                modal.find('.modal-body').show();
+            }
+
+            localMediaStream = stream;
+            video[0].src = window.URL.createObjectURL(stream);
+            video[0].onloadedmetadata = function(e) {
+                cameraCanvas[0].width = video.width();
+                cameraCanvas[0].height = video.height();
+                receiveLoop = setInterval(function() {
+                    // Draw current frame
+                    cameraCanvas[0].getContext('2d').drawImage(video[0], 0, 0);
+
+                    // Try to look for a QR code
+                    qrcode.callback = function(s) {
+                        receiveQRCode(s, function(message) {
+                            if (isOfferer) {
+                                handleJsonAnswerFromPC2(message);
+                                stopCamera();
+                                cameraContainer.hide().after("Received answer. If this whole thing doesn't disappear in a few seconds it probably failed to connect!");
+                            } else {
+                                handleJsonOfferFromPC1(message);
+                                stopCamera();
+                                cameraContainer.hide().after('Received offer.<br>');
+                                qrCodeContainer.text('Generating answer.');
+                            }
+                        });
+                    }
+                    qrcode.decode();
+                }, 33);
+            }
+        }, function (e) {
+            console.log("getUserMediaError", e);
+        });
+    }
+
+    function stopCamera() {
+        clearInterval(receiveLoop);
+        video[0].src = null;
+        if (localMediaStream && localMediaStream.stop) {
+            localMediaStream.stop();
+        }
+    }
+
+    function remove() {
+        clearInterval(sendLoop);
+        stopCamera();
+        modal.modal('hide');
+    }
+
+    this.showQRCodes = showQRCodes;
+    this.remove = remove;
 }

@@ -1,0 +1,9 @@
+[submodule "external/jsqrcode"]
+	path = external/jsqrcode
+	url = https://github.com/fta2012/jsqrcode.git
+[submodule "external/jquery-qrcode"]
+	path = external/jquery-qrcode
+	url = https://github.com/jeromeetienne/jquery-qrcode.git
+[submodule "external/lz-string"]
+	path = external/lz-string
+	url = https://github.com/pieroxy/lz-string.git

@@ -1,3 +1,23 @@
+Fork of [serverless-rtc](https://github.com/cjb/serverless-webrtc/) which was a
+demo that showed how to use WebRTC without a signaling server by performing the
+offer/answer exchange manually via IM/email/etc.
+
+This fork builds on top of that demo by allowing you to exchange the
+offer/answer using QR codes as long as the two browsers have cameras that can see
+each other's screen.
+
+Uses [lz-string](https://github.com/pieroxy/lz-string) for compression,
+[jsqrcode](https://github.com/LazarSoft/jsqrcode) for scanning, and
+[jquery-qrcode](https://github.com/jeromeetienne/jquery-qrcode) for displaying
+QR codes. So after cloning you also need to:
+
+```
+ git submodule init
+ git submodule update
+```
+
+# ORIGINAL README:
+
 serverless-webrtc
 =================
 

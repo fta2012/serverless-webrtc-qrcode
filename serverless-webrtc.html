@@ -6,12 +6,36 @@
     <script src="js/adapter.js"></script>
     <script src="js/jquery-2.0.0.js"></script>
     <script src="js/bootstrap.js"></script>
+
+    <script type="text/javascript" src="external/jsqrcode/src/grid.js"></script>
+    <script type="text/javascript" src="external/jsqrcode/src/version.js"></script>
+    <script type="text/javascript" src="external/jsqrcode/src/detector.js"></script>
+    <script type="text/javascript" src="external/jsqrcode/src/formatinf.js"></script>
+    <script type="text/javascript" src="external/jsqrcode/src/errorlevel.js"></script>
+    <script type="text/javascript" src="external/jsqrcode/src/bitmat.js"></script>
+    <script type="text/javascript" src="external/jsqrcode/src/datablock.js"></script>
+    <script type="text/javascript" src="external/jsqrcode/src/bmparser.js"></script>
+    <script type="text/javascript" src="external/jsqrcode/src/datamask.js"></script>
+    <script type="text/javascript" src="external/jsqrcode/src/rsdecoder.js"></script>
+    <script type="text/javascript" src="external/jsqrcode/src/gf256poly.js"></script>
+    <script type="text/javascript" src="external/jsqrcode/src/gf256.js"></script>
+    <script type="text/javascript" src="external/jsqrcode/src/decoder.js"></script>
+    <script type="text/javascript" src="external/jsqrcode/src/qrcode.js"></script>
+    <script type="text/javascript" src="external/jsqrcode/src/findpat.js"></script>
+    <script type="text/javascript" src="external/jsqrcode/src/alignpat.js"></script>
+    <script type="text/javascript" src="external/jsqrcode/src/databr.js"></script>
+
+    <script type="text/javascript" src="external/jquery-qrcode/jquery.qrcode.min.js"></script>
+
+    <script type="text/javascript" src="external/lz-string/libs/release/lz-string-1.3.3-min.js"></script>
+
     <link href="css/bootstrap.css" rel="stylesheet">
     <link href="css/bootstrap-responsive.css" rel="stylesheet">
     <link href="css/serverless-webrtc-bootstrap.css" rel="stylesheet">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 </head>
 <body>
-<a href="https://github.com/cjb/serverless-webrtc/"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_green_007200.png" alt="Fork me on GitHub"></a>
+<a href="https://github.com/fta2012/serverless-webrtc-qrcode/"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_green_007200.png" alt="Fork me on GitHub"></a>
 <div class="span12">
   <fieldset class="well">
     <p class="head muted">
@@ -100,8 +124,20 @@
     <h3 id="myModalLabel">Create or join a room?</h3>
   </div>
   <div class="modal-footer">
+    <label>
+        <input type="checkbox" id="using-camera" checked />
+        Using QR codes 
+    </label>
     <button class="btn" id="joinBtn" data-dismiss="modal" aria-hidden="true">Join</button>
     <button class="btn btn-primary" id="createBtn" data-dismiss="modal" aria-hidden="true">Create</button>
+  </div>
+</div>
+
+<div class="modal bs-example-modal-lg" id="qrFlow" data-backdrop="static" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true" hidden>
+  <div class="modal-header">
+    <h3 id="myModalLabel">Click allow camera permissions!</h3>
+  </div>
+  <div class="modal-body">
   </div>
 </div>
 
