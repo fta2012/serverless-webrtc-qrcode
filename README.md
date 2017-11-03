@@ -16,6 +16,10 @@ QR codes. So after cloning you also need to:
  git submodule update
 ```
 
+[Blog post](http://franklinta.com/2014/10/19/serverless-webrtc-using-qr-codes/)
+
+[Demo](https://fta2012.github.io/serverless-webrtc-qrcode/serverless-webrtc.html)
+
 # ORIGINAL README:
 
 serverless-webrtc

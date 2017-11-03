@@ -314,16 +314,14 @@ function QRFlow(isOfferer) {
             startCamera();
         });
 
-    // TODO: firefox doesn't support media stream track
-    MediaStreamTrack.getSources(function(sources) {
+    navigator.mediaDevices.enumerateDevices().then((mediaDeviceInfos) => {
+        var sources = mediaDeviceInfos.filter((source) => source.kind === 'videoinput');
         for (var i = 0; i < sources.length; i++) {
-            if (sources[i].kind === 'video') {
                 cameraSelect.append(
                     $('<option>')
-                        .attr('value', sources[i].id)
+                        .attr('value', sources[i].deviceId)
                         .text(sources[i].label)
                 );
-            }
         }
     });
 
